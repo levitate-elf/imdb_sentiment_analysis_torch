@@ -1,6 +1,6 @@
 # imdb_sentiment_analysis_torch
 
-本 README 汇总了当前提交的所有模型在训练集和验证集上的表现，便于比较不同模型的准确率
+本 README 基于电影评论情感二分类采用了cnn,transformer,gru等经典模型，并进一步在 DeBERTa上尝试多种微调方式（如 Prompt/Prefix/P-Tuning/LoRA 等 PEFT 方法）
 
 ## 1. 评测设定
 
