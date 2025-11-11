@@ -57,11 +57,25 @@
 
 ---
 
-## 4. 最后结论
+## 4. DeBERTa-v3-base 的 PEFT 结果
 
-- bert_native的训练准确率在它的最后记录点已经达到 0.98，distill_native达到 0.97，说明它们对训练数据拟合得很好。且都在非常早期（epoch=1，也就是只训练了大约两轮之后）就达到了约 0.92 的验证准确率。这说明基于预训练表示的模型在极少的训练轮数内就可以达到很高的性能，收敛速度非常快
-- 纯卷积的cnn在验证集上最高为 0.81，明显落后于其他模型。这说明单一cnn结构在该任务上缺乏对长程依赖的表达能力。
-- attention_lstm,capsule_lstm,gru这些包含序列建模或注意力机制的结构，验证准确率在 0.87～0.89 区间，稳定可用
+> 相同训练轮次下，记录各 epoch 验证准确率（`val_acc`）：
+
+| 方法     | epoch=1 | epoch=2 | epoch=3 |
+|:---------|--------:|--------:|--------:|
+| Prompt   | 0.5292  | 0.5782  | 0.6379  |
+| P-Tuning | 0.5088  | 0.6384  | 0.6745  |
+| Prefix   | 0.5198  | 0.5292  | 0.5343  |
+| Lora     |0.9073   |0.9284   |0.9346   |
+
+### 4.1 显存与模型选择
+- 在同等设定下，**`microsoft/deberta-v2-xxlarge`**在 **16 GB GPU** 上多次 **OOM**（`max_length ≥ 256`、`batch_size ≥ 2`、未量化或仅 4bit 量化时尤甚）。  
+- 为确保复现与稳定训练统一以 **`microsoft/deberta-v3-base`** 作为骨干进行 PEFT（LoRA / P-Tuning / Prompt /Prefix）：
+  - `deberta-v3-base` 采用8bit量化 可达 **0.93+** 的 `val_acc`，显存压力显著低于 `v2-xxlarge`；
+  - 显存更宽裕可尝试 `deberta-v3-large`。
+
+---
+
 
 
 
