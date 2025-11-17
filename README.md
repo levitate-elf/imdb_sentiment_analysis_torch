@@ -75,9 +75,64 @@
   - 显存更宽裕可尝试 `deberta-v3-large`。
 
 ---
+尝试使用 unsloth 改进微调效率，对 R-Drop、Supervised Contrastive Learning 方法进行实践。
 
+## 模型准确率
 
+| models            | 准确率   |
+|-------------------|---------|
+| DeBERTa-V2-unsloth | 0.9658 |
+| BERT-RDrop         | 0.9374 |
+| BERT-SCL           | 0.9137 |
+| BERT-RDrop-unsloth-loRA    | 0.9251 |
+| BERT-SCL-unsloth-lora | 0.9324 |
 
+### R-Drop介绍
 
+背景：在训练神经网络的过程中，过拟合时有发生，DropOut技术可以解决过拟合问题并且提高模型的泛化能力，但是DropOut的随机性导致了训练和实际应用中模型的不一致性。（即训练阶段采用随机删除单元的方法，而在实际应用的过程中采用的是不删除任何单元的完整模型）本文中介绍了一种简单的方法来正则化由DropOut引起的不一致性，称为R-Drop。
+
+定义：R-Drop通过最小化两个分布之间的双向KL散度，来使得同一份数据的两个子模型输出的两个分布保持一致。与传统的神经网络训练中的DropOut策略相比，R-Drop只是增加了一个没有任何结构改变的KL散度损失。
+
+整体框架结构：R-Drop的总体框架如下，以Transformer为例，左图显示了一个输入x将遍历模型两次，得到两个分布p1和p2，右图显示了由dropout产生的两个不同的子模型。（如图右侧所示，输出预测分布P1和输出分布P2在各层删除的单元各不相同，因此，对于同一输入数据对 (x, y)，P1和P2的分布是不相同的，我们的R-Drop方法试图通过最小化同一样本这两个输出分布之间的双向KL散度来正则化模型预测）。
+<img width="900" height="400" alt="image" src="https://github.com/user-attachments/assets/24da268f-0d33-4f3d-a665-6aa01a2edf93" />
+
+#### R-Drop公式详解
+具体来说，以分类问题为例，训练数据为{x_i, y_i} (i=1到n)，模型为 P_θ(y|x)，每个样本的 loss 一般是交叉熵：
+
+```math
+\mathcal{L}_i = -\log P_\theta(y_i|x_i) \quad (1)
+```
+
+在"Dropout两次"的情况下，其实我们可以认为样本已经通过了两个略有不同的模型，我们分别记为 P_θ^(1)(y|x) 和 P_θ^(2)(y|x)。这时候 R-Drop 的 loss 分为两部分，一部分是常规的交叉熵：
+
+```math
+\mathcal{L}^{(CE)}_i = -\log P^{(1)}_\theta(y_i|x_i) - \log P^{(2)}_\theta(y_i|x_i) \quad (2)
+```
+
+另一部分则是两个模型之间的对称 KL 散度，它希望不同 Dropout 的模型输出尽可能一致：
+
+```math
+\mathcal{L}^{(KL)}_i = \frac{1}{2} \left[ D_{KL} \left( P^{(2)}_\theta(y|x_i) \middle\| P^{(1)}_\theta(y|x_i) \right) + D_{KL} \left( P^{(1)}_\theta(y|x_i) \middle\| P^{(2)}_\theta(y|x_i) \right) \right] \quad (3)
+```
+
+最终 loss 就是两个 loss 的加权和：
+
+```math
+\mathcal{L}_i = \mathcal{L}^{(CE)}_i + \alpha \mathcal{L}^{(KL)}_i \quad (4)
+```
+
+也就是说，它在常规交叉熵的基础上，加了一项强化模型鲁棒性正则项。
+#### R-Drop计算流程
+
+**输入：** 训练数据对集合 D = {(x_i, y_i)}^n  
+**输出：** 得到模型参数 w  
+
+1. 使用参数 w 来初始化模型
+2. 如果没有收敛，则循环执行以下步骤：
+   - 随机抽样数据对 (x_i, y_i)
+   - 重复输入数据两次，得到两个输出分布
+   - 计算对数似然损失函数
+   - 计算双向KL散度
+   - 通过最小化函数 L 来更新模型参数
 
 
