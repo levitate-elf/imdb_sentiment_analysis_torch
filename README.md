@@ -134,5 +134,82 @@
    - 计算对数似然损失函数
    - 计算双向KL散度
    - 通过最小化函数 L 来更新模型参数
+### SCL（Supervised Contrastive Learning）介绍
+
+背景：在传统的监督学习中，交叉熵损失函数被广泛使用，但它主要关注样本与真实标签之间的关系，忽略了样本之间的内在结构信息。监督对比学习（SCL）通过利用标签信息来构建正负样本对，学习更具判别性的特征表示。
+
+定义：SCL通过将同一类别的样本在特征空间中拉近，不同类别的样本推远，来学习更具判别性的特征表示。与传统的交叉熵损失相比，SCL通过对比学习的方式增强了模型的泛化能力和特征表示质量。
+
+整体框架结构：SCL的总体框架如下，对于每个输入样本，通过数据增强得到多个视图，利用标签信息构建正样本对（同类样本）和负样本对（不同类样本），通过对比损失函数来优化特征表示。
+<img width="500" height="400" alt="image" src="https://github.com/user-attachments/assets/c3a02223-028f-4816-9474-bc89e9f7037d" />
+
+#### SCL公式详解
+具体来说，以分类问题为例，训练数据为{x_i, y_i} (i=1到n)，模型为 f_θ(x)，每个样本的特征表示为 z_i = f_θ(x_i)。
+
+在监督对比学习中，对于每个锚点样本 i，其损失函数定义为：
+
+```math
+\mathcal{L}_{SCL}^{(i)} = -\frac{1}{|P(i)|} \sum_{p \in P(i)} \log \frac{\exp(z_i \cdot z_p / \tau)}{\sum_{a \in A(i)} \exp(z_i \cdot z_a / \tau)} \quad (1)
+```
+
+其中：
+
+- P(i) 是与样本 i 同一类别的正样本集合（不包括 i 自身）
+- A(i) 是批次中除 i 外的所有样本集合
+- τ 是温度超参数
+- z_i · z_j 表示特征向量的点积相似度
+
+  
+# unsloth 调用重写的模型
+
+尝试使用 unsloth 调用重写后的模型。
+
+## 1.模型加载阶段
+
+   ```python
+   model, tokenizer = FastModel.from_pretrained(
+       model_name=model_name,
+       max_seq_length=512,
+       auto_model=DebertaV3ForSequenceClassificationSupCon,
+       num_labels=NUM_CLASSES,
+       gpu_memory_utilization=0.8,
+   )
+```
+使用 Unsloth 的 FastModel 加载模型
+自动应用 Unsloth 的内存优化和计算优化
+## 2.lora配置阶段
+  ```python
+model = FastModel.get_peft_model(
+    model,
+    r=16,
+    lora_alpha=32,
+    use_gradient_checkpointing="unsloth",  # Unsloth 特有的梯度检查点
+    target_modules="all-linear",
+)
+```
+使用 Unsloth 的 LoRA 实现，相比原始 PEFT 有额外优化
+
+## 3.训练阶段
+ ```python
+trainer = Trainer(  # 这是被 Unsloth patch 过的 Trainer
+    model=model,
+    args=train_args,
+    processing_class=tokenizer,
+    train_dataset=train_dataset,
+    eval_dataset=val_dataset,
+    compute_metrics=compute_metrics,
+)
+```
+
+Trainer 已经被 Unsloth 修改过，包含训练加速
+## 4.推理阶段
+ ```python
+model.eval()
+FastLanguageModel.for_inference(model)  # Unsloth 的推理优化
+```
+显式调用 Unsloth 的推理优化方法
+即使使用标准 DataLoader，模型本身仍受益于 Unsloth 的优化
+
+
 
 
