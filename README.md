@@ -210,6 +210,20 @@ FastLanguageModel.for_inference(model)  # Unsloth 的推理优化
 显式调用 Unsloth 的推理优化方法
 即使使用标准 DataLoader，模型本身仍受益于 Unsloth 的优化
 
+# 指令学习在SST-2数据集上的性能总结
+
+## 模型性能对比
+
+| 模型 | SST-2准确度 |  
+| :--------:   | :-----: |
+|   **Llama-3.3-70B** | 0.9427 |
+| **Qwen3-max** | 0.9587 | 
+| **Gemma-2B** | 0.9087 | 
+| **Phi-3-mini 3.8B** | 0.9415 | 
+| **Mistral-7B** | 0.9151 |
+| **deepseek-v3.1** | 0.9576 |
+
+
 
 
 
