@@ -223,7 +223,86 @@ FastLanguageModel.for_inference(model)  # Unsloth 的推理优化
 | **Mistral-7B** | 0.9151 |
 | **deepseek-v3.1** | 0.9576 |
 
+## 具体实现
+下面以qwen3-max为例，展示prompt构造，api调用，评估逻辑 
+
+### prompt构造
+
+```python
+def build_prompt(sentence: str) -> str:
+    """
+    把一条影评句子包装成指令式 prompt
+    """
+    return f"""You are a sentiment analysis assistant.
+Classify the sentiment of the following movie review as "positive" or "negative".
+
+Review: "{sentence}"
+
+Answer with only one word: positive or negative.
+"""
+```
+由于Prompt 没有任何标注示例，所以严格来说是 zero-shot 指令学习，完全靠自然语言把任务描述清楚，让模型“自己悟出”如何从影评判断情感。
+
+### api调用
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_DASHSCOPE_API_KEY",
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+)
+
+MODEL_NAME = "qwen3-max"   # DashScope 上的 Qwen3 模型
 
 
+def predict_label(sentence: str) -> int:
+    """
+    调用 qwen3-max，返回标签 0/1：
+      0 -> negative
+      1 -> positive
+    """
+    prompt = build_prompt(sentence)
+
+    resp = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": "You are a helpful sentiment analysis assistant."},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.0,   # 设成 0，让输出尽量稳定
+        max_tokens=5,      # 只要 "positive"/"negative" 这种短输出
+    )
+
+    text = resp.choices[0].message.content.strip().lower()
+
+    if "positive" in text:
+        return 1
+    if "negative" in text:
+        return 0
+
+    return 0
+```
+
+### 评估逻辑
+
+```python
+def eval_sst2_on_qwen():
+    total = len(valid_ds)
+    correct = 0
+    for sample in tqdm(valid_ds, desc="Evaluating SST-2 (validation) with qwen3-max"):
+        sentence = sample["sentence"]
+        gold = sample["label"]   # 0 or 1
+
+        pred = predict_label(sentence)
+
+        if pred == gold:
+            correct += 1
+
+    acc = correct / total
+    print(f"\nAccuracy on SST-2 (validation): {acc:.4f}  ({correct}/{total})")
+```
+## 总结
+当前为zero-shot 指令学习，模型在 SST-2 上没有经过任何专门训练，只靠指令理解，准确率会受 prompt 写法影响较大，通常略低于精调的 RoBERTa/BERT 模型。
 
 
